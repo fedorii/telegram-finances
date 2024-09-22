@@ -1,13 +1,13 @@
 import sqlite3
 
 
-def add_expense(time, amount, category):
+def add_expense(time, amount, category, currency):
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO expenses (time, amount, category)
+        INSERT INTO expenses (time, amount, category, currency)
         VALUES (?, ?, ?)
-    ''', (time, amount, category))
+    ''', (time, amount, category, currency))
     conn.commit()
     conn.close()
 
@@ -15,11 +15,11 @@ def remove_expense(command, expense_id=None):
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
     match command:
-        case "/byid":
+        case "byid":
             cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id))
-        case "/latest":
+        case "latest":
             cursor.execute("DELETE FROM expenses WHERE id = (SELECT MAX(id) from expenses)")
-        case "/all":
+        case "all":
             cursor.execute("DELETE FROM expenses")
         case _:
             raise ValueError("Unknown command")
@@ -29,7 +29,7 @@ def remove_expense(command, expense_id=None):
 def get_all_expenses() -> list:
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT id, time, amount, category FROM expenses")
+    cursor.execute("SELECT id, time, amount, category, currency FROM expenses")
     expenses = cursor.fetchall()
     conn.close()
     return expenses
@@ -40,7 +40,7 @@ cursor = conn.cursor()
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS expenses
     (id INTEGER PRIMARY KEY AUTOINCREMENT,
-    time TEXT, amount REAL, category TEXT)
+    time TEXT, amount REAL, category TEXT, currency TEXT)
 ''')
 conn.commit()
 conn.close()
