@@ -1,4 +1,5 @@
 import asyncio
+import json
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher
@@ -15,8 +16,9 @@ import db
 dp = Dispatcher()
 
 
-class ExpenseStates(StatesGroup):
-    waiting_command = State()
+class StateMachine(StatesGroup):
+    waiting_for_adding = State()
+    waiting_for_removing = State()
 
 
 @dp.message(CommandStart())
@@ -39,7 +41,7 @@ Here's a list of the available commands:
 """)
 
 @dp.message(Command("add"))
-async def cmd_add(message: Message, state: FSMContext):
+async def cmd_add(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="RUB", callback_data="currency_rub"),
@@ -48,47 +50,54 @@ async def cmd_add(message: Message, state: FSMContext):
         ]
     ])
     await message.answer("Please choose the currency:", reply_markup=keyboard)
-    await state.update_data(action="add")
-    await state.set_state(ExpenseStates.waiting_command)
 
 @dp.message(Command("remove"))
-async def cmd_remove(message: Message, state: FSMContext):
+async def cmd_remove(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="by ID", callback_data="remove_byid"),
             InlineKeyboardButton(text="latest", callback_data="remove_latest"),
             InlineKeyboardButton(text="all", callback_data="remove_all")
         ]
     ])
     await message.answer("Please choose the action type:", reply_markup=keyboard)
-    await state.update_data(action="remove")
-    await state.set_state(ExpenseStates.waiting_command)
 
 @dp.message(Command("show"))
 async def cmd_remove(message: Message):
-    await message.answer(str(db.get_all_expenses()))
+    await message.answer(json.dumps(db.get_all_expenses(), indent=4))
 
 @dp.callback_query()
-@dp.message(StateFilter(ExpenseStates.waiting_command))
-async def controller(callback: CallbackQuery, state: FSMContext):
+async def callback_controller(callback: CallbackQuery, state: FSMContext):
+    if callback.data.startswith("currency_"):
+        currency = callback.data.split("_")[1].lower()
+        await state.update_data(currency=currency)
+        await callback.message.answer("Please enter the expense in this form: {amount} {category}")
+        await state.set_state(StateMachine.waiting_for_adding)
+    if callback.data.startswith("remove_"):
+        cmd_type = callback.data.split("_")[1]
+        await state.update_data(cmd_type=cmd_type)
+        await state.set_state(StateMachine.waiting_for_removing)
+
+@dp.message(StateFilter(StateMachine.waiting_for_adding))
+async def state_add(message: Message, state: FSMContext):
     user_data = await state.get_data()
-    action = user_data.get("action")
-    match action:
-        case "add":
-            try:
-                amount, category = callback.message.text.split(maxsplit=1)
-                amount = float(amount)
-                time = datetime.now().isoformat()
-                currency = callback.data.split("_")[1]
-                db.add_expense(time, amount, category, currency)
-                await callback.message.answer(f"Expense information added: {amount} {currency} in {category}")
-                await state.clear()
-            except ValueError:
-                await callback.message.answer("Invalid format. Please use: {amount} {category}")
-        case "remove":
-            db.remove_expense(callback.data.split("_")[1])
-            await callback.message.answer("Information has been removed")
-    await state.clear()
+    try:
+        amount, category = message.text.split(maxsplit=1)
+        amount = float(amount)
+        time = datetime.now().isoformat()
+        currency = user_data.get("currency")
+        db.add_expense(time, amount, category, currency)
+        await message.answer(f"Done! Enter /add to add new expense")
+        await state.clear()
+    except ValueError:
+        await message.answer("Invalid format. Please use: {amount} {category}")
+
+@dp.message(StateFilter(StateMachine.waiting_for_removing))
+async def state_remove(message: Message, state: FSMContext):
+        user_data = await state.get_data()
+        cmd_type = user_data.get("cmd_type")
+        db.remove_expense(cmd_type)
+        await message.answer("Information has been removed")
+        await state.clear()
 
 
 async def main(): 
