@@ -6,23 +6,18 @@ def add_expense(time, amount, category, currency):
     cursor = conn.cursor()
     cursor.execute('''
         INSERT INTO expenses (time, amount, category, currency)
-        VALUES (?, ?, ?)
+        VALUES (?, ?, ?, ?)
     ''', (time, amount, category, currency))
     conn.commit()
     conn.close()
 
-def remove_expense(command, expense_id=None):
+def remove_expense(cmd_type):
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
-    match command:
-        case "byid":
-            cursor.execute("DELETE FROM expenses WHERE id = ?", (expense_id))
-        case "latest":
-            cursor.execute("DELETE FROM expenses WHERE id = (SELECT MAX(id) from expenses)")
-        case "all":
-            cursor.execute("DELETE FROM expenses")
-        case _:
-            raise ValueError("Unknown command")
+    if cmd_type == "latest":
+        cursor.execute("DELETE FROM expenses WHERE id = (SELECT MAX(id) from expenses)")
+    if cmd_type == "all":
+        cursor.execute("DELETE FROM expenses")
     conn.commit()
     conn.close()
 
