@@ -18,7 +18,6 @@ dp = Dispatcher()
 
 class StateMachine(StatesGroup):
     waiting_for_adding = State()
-    waiting_for_removing = State()
 
 
 @dp.message(CommandStart())
@@ -74,11 +73,11 @@ async def callback_controller(callback: CallbackQuery, state: FSMContext):
         await state.set_state(StateMachine.waiting_for_adding)
     if callback.data.startswith("remove_"):
         cmd_type = callback.data.split("_")[1]
-        await state.update_data(cmd_type=cmd_type)
-        await state.set_state(StateMachine.waiting_for_removing)
+        db.remove_expense(cmd_type)
+        await callback.message.answer("Information has been removed")
 
 @dp.message(StateFilter(StateMachine.waiting_for_adding))
-async def state_add(message: Message, state: FSMContext):
+async def process_adding(message: Message, state: FSMContext):
     user_data = await state.get_data()
     try:
         amount, category = message.text.split(maxsplit=1)
@@ -90,14 +89,6 @@ async def state_add(message: Message, state: FSMContext):
         await state.clear()
     except ValueError:
         await message.answer("Invalid format. Please use: {amount} {category}")
-
-@dp.message(StateFilter(StateMachine.waiting_for_removing))
-async def state_remove(message: Message, state: FSMContext):
-        user_data = await state.get_data()
-        cmd_type = user_data.get("cmd_type")
-        db.remove_expense(cmd_type)
-        await message.answer("Information has been removed")
-        await state.clear()
 
 
 async def main(): 
