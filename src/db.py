@@ -1,4 +1,5 @@
 import sqlite3
+from tabulate import tabulate
 
 
 def add_expense(time, amount, category, currency):
@@ -21,13 +22,19 @@ def remove_expense(cmd_type):
     conn.commit()
     conn.close()
 
-def get_all_expenses() -> list:
+def get_expenses() -> list:
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
-    cursor.execute("SELECT id, time, amount, category, currency FROM expenses")
+    cursor.execute("SELECT * FROM expenses")
     expenses = cursor.fetchall()
     conn.close()
     return expenses
+
+def format_expenses():
+    data = get_expenses()
+    columns = ["ID", "date", "amount", "description", "currency"]
+    table = tabulate(data, columns, tablefmt="grid")
+    return table
 
 
 conn = sqlite3.connect("expenses.db")
