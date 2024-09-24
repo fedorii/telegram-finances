@@ -1,5 +1,4 @@
 import asyncio
-import json
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher
@@ -62,7 +61,8 @@ async def cmd_remove(message: Message):
 
 @dp.message(Command("show"))
 async def cmd_remove(message: Message):
-    await message.answer(json.dumps(db.get_all_expenses(), indent=4))
+    table = db.format_expenses()
+    await message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
 
 @dp.callback_query()
 async def callback_controller(callback: CallbackQuery, state: FSMContext):
@@ -85,7 +85,7 @@ async def process_adding(message: Message, state: FSMContext):
         time = datetime.now().isoformat()
         currency = user_data.get("currency")
         db.add_expense(time, amount, category, currency)
-        await message.answer(f"Done! Enter /add to add new expense")
+        await message.answer(f"Done! Use /add to add new expense")
         await state.clear()
     except ValueError:
         await message.answer("Invalid format. Please use: {amount} {category}")
