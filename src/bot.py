@@ -80,7 +80,8 @@ async def callback_controller(callback: CallbackQuery, state: FSMContext):
 async def process_adding(message: Message, state: FSMContext):
     user_data = await state.get_data()
     try:
-        amount, category = message.text.split(maxsplit=1)
+        user_input = message.text.split(maxsplit=1)
+        amount, category = user_input[0], " ".join(user_input[1:])
         amount = float(amount)
         time = datetime.now().isoformat()
         currency = user_data.get("currency")
