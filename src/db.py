@@ -2,17 +2,28 @@ import sqlite3
 from tabulate import tabulate
 
 
-def add_expense(time, amount, category, currency):
+conn = sqlite3.connect("expenses.db")
+cursor = conn.cursor()
+cursor.execute('''
+    CREATE TABLE IF NOT EXISTS expenses
+    (id INTEGER PRIMARY KEY AUTOINCREMENT,
+    time TEXT, amount REAL, currency TEXT, category TEXT, description TEXT)
+''')
+conn.commit()
+conn.close()
+
+
+def add_expense(time, amount, currency, category, description) -> None:
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO expenses (time, amount, category, currency)
-        VALUES (?, ?, ?, ?)
-    ''', (time, amount, category, currency))
+        INSERT INTO expenses (time, amount, currency, category, description)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (time, amount, currency, category, description))
     conn.commit()
     conn.close()
 
-def remove_expense(cmd_type):
+def remove_expense(cmd_type) -> None:
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
     if cmd_type == "latest":
@@ -30,19 +41,8 @@ def get_expenses() -> list:
     conn.close()
     return expenses
 
-def format_expenses():
+def format_expenses() -> str:
     data = get_expenses()
-    columns = ["ID", "date", "amount", "description", "currency"]
+    columns = ["ID", "date", "amount", "currency", "category", "description"]
     table = tabulate(data, columns, tablefmt="grid")
     return table
-
-
-conn = sqlite3.connect("expenses.db")
-cursor = conn.cursor()
-cursor.execute('''
-    CREATE TABLE IF NOT EXISTS expenses
-    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-    time TEXT, amount REAL, category TEXT, currency TEXT)
-''')
-conn.commit()
-conn.close()
