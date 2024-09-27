@@ -2,3 +2,4 @@
 .venv
 __pycache__
 expenses.db
+credentials.json
