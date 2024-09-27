@@ -8,15 +8,16 @@ from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from config import bot_token
 import db
+from config import bot_token
+import spreadsheets
 
 
 dp = Dispatcher()
 
 
 class StateMachine(StatesGroup):
-    waiting_for_adding = State()
+    waiting_for_amount = State()
 
 
 @dp.message(CommandStart())
@@ -39,11 +40,11 @@ Here's a list of the available commands:
 """)
 
 @dp.message(Command("add"))
-async def cmd_add(message: Message):
+async def cmd_currency(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="RUB", callback_data="currency_rub"),
-            InlineKeyboardButton(text="TNG", callback_data="currency_TNG"),
+            InlineKeyboardButton(text="TNG", callback_data="currency_tng"),
             InlineKeyboardButton(text="USD", callback_data="currency_usd")
         ]
     ])
@@ -60,32 +61,56 @@ async def cmd_remove(message: Message):
     await message.answer("Please choose the action type:", reply_markup=keyboard)
 
 @dp.message(Command("show"))
-async def cmd_remove(message: Message):
+async def cmd_show_expenses(message: Message):
     table = db.format_expenses()
     await message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
 
 @dp.callback_query()
 async def callback_controller(callback: CallbackQuery, state: FSMContext):
     if callback.data.startswith("currency_"):
-        currency = callback.data.split("_")[1].lower()
+        currency = callback.data.split("_")[1]
         await state.update_data(currency=currency)
-        await callback.message.answer("Please enter the expense in this form: {amount} {category}")
-        await state.set_state(StateMachine.waiting_for_adding)
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text="Food", callback_data="category_food"),
+            InlineKeyboardButton(text="Transport", callback_data="category_food")
+        ], [
+            InlineKeyboardButton(text="Utilities", callback_data="category_utilities"),
+            InlineKeyboardButton(text="Education", callback_data="category_education")
+        ], [
+            InlineKeyboardButton(text="Medical", callback_data="category_medical"),
+            InlineKeyboardButton(text="Shopping", callback_data="category_shopping")
+        ], [
+            InlineKeyboardButton(text="Tax", callback_data="category_tax"),
+            InlineKeyboardButton(text="Sub", callback_data="category_sub")]])
+        await callback.message.answer("Please choose the category:", reply_markup=keyboard)
+    
+    if callback.data.startswith("category_"):
+        category = callback.data.split("_")[1]
+        await state.update_data(category=category)
+        await callback.message.answer("Please enter the expense in this form: {amount} {description}")
+        await state.set_state(StateMachine.waiting_for_amount)
+
     if callback.data.startswith("remove_"):
         cmd_type = callback.data.split("_")[1]
         db.remove_expense(cmd_type)
+        # if cmd_type == "latest":                  # Implement removing 
+        #     spreadsheets.remove_update_sheet()    # action in Google Sheets
         await callback.message.answer("Information has been removed")
 
-@dp.message(StateFilter(StateMachine.waiting_for_adding))
-async def process_adding(message: Message, state: FSMContext):
+@dp.message(StateFilter(StateMachine.waiting_for_amount))
+async def process_amount(message: Message, state: FSMContext):
     user_data = await state.get_data()
     try:
         user_input = message.text.split(maxsplit=1)
-        amount, category = user_input[0], " ".join(user_input[1:])
+        amount, description = user_input[0], " ".join(user_input[1:])
         amount = float(amount)
         time = datetime.now().isoformat()
         currency = user_data.get("currency")
-        db.add_expense(time, amount, category, currency)
+        category = user_data.get("category")
+
+        spreadsheets.update_sheet(time, amount, currency, category, description)
+        db.add_expense(time, amount, currency, category, description)
+        
         await message.answer(f"Done! Use /add to add new expense")
         await state.clear()
     except ValueError:
