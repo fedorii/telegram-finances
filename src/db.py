@@ -45,7 +45,7 @@ def update_cell_color(action, category=None, row=None, col=None):
             "food": "#f69a3f",
             "transport": "#7fabf6",
             "utilities": "#97d07d",
-            "education": "#97d07d",
+            "education": "#9f8cd7",
             "medical": "#cd4747",
             "shopping": "#f1c130",
             "tax": "#b06313",
@@ -99,13 +99,12 @@ def remove_expense(cmd_type) -> None:
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
     if cmd_type == "latest":
-        cursor.execute("DELETE FROM expenses WHERE id = (SELECT MAX(id) from expenses)")
-        cursor.execute("SELECT * FROM expenses")
-        expenses = cursor.fetchall()
-        if len(expenses) != 0:
-            prev_expense = expenses[-1]
-            row = sheet.find(prev_expense[1]).row
-            sheet.delete_rows(row)
+        cursor.execute("SELECT * FROM expenses ORDER BY id DESC LIMIT 1")
+        latest_expense = cursor.fetchone()
+        if latest_expense:
+            row = sheet.find(latest_expense[1]).row
+            cursor.execute("DELETE FROM expenses WHERE id = (SELECT MAX(id) from expenses)")
+            sheet.batch_clear([f"C{row}:G{row}"])
             update_cell_color(action="remove", row=row)
     elif cmd_type == "all":
         cursor.execute("DELETE FROM expenses")
