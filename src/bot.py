@@ -8,9 +8,8 @@ from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-import db
 from config import bot_token
-import spreadsheets
+import db
 
 
 dp = Dispatcher()
@@ -71,17 +70,21 @@ async def callback_controller(callback: CallbackQuery, state: FSMContext):
         currency = callback.data.split("_")[1]
         await state.update_data(currency=currency)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[
-            InlineKeyboardButton(text="Food", callback_data="category_food"),
-            InlineKeyboardButton(text="Transport", callback_data="category_food")
+            InlineKeyboardButton(text="No category", callback_data="category_no"),
+            InlineKeyboardButton(text="Food", callback_data="category_food")
         ], [
-            InlineKeyboardButton(text="Utilities", callback_data="category_utilities"),
-            InlineKeyboardButton(text="Education", callback_data="category_education")
+            InlineKeyboardButton(text="Transport", callback_data="category_food"),
+            InlineKeyboardButton(text="Utilities", callback_data="category_utilities")
         ], [
-            InlineKeyboardButton(text="Medical", callback_data="category_medical"),
-            InlineKeyboardButton(text="Shopping", callback_data="category_shopping")
+            InlineKeyboardButton(text="Education", callback_data="category_education"),
+            InlineKeyboardButton(text="Medical", callback_data="category_medical")
         ], [
-            InlineKeyboardButton(text="Tax", callback_data="category_tax"),
-            InlineKeyboardButton(text="Sub", callback_data="category_sub")]])
+            InlineKeyboardButton(text="Shopping", callback_data="category_shopping"),
+            InlineKeyboardButton(text="Tax", callback_data="category_tax")
+        ], [
+            InlineKeyboardButton(text="Sub", callback_data="category_sub"),
+            InlineKeyboardButton(text="Investments", callback_data="category_investments")
+        ]])
         await callback.message.answer("Please choose the category:", reply_markup=keyboard)
     if callback.data.startswith("category_"):
         category = callback.data.split("_")[1]
@@ -90,27 +93,22 @@ async def callback_controller(callback: CallbackQuery, state: FSMContext):
         await state.set_state(StateMachine.waiting_for_amount)
     if callback.data.startswith("remove_"):
         cmd_type = callback.data.split("_")[1]
-        remove_function = spreadsheets.remove_from_sheet(cmd_type)
-        if remove_function:
-            await callback.message.answer("Information has been removed")
-        if not remove_function:
-            await callback.message.answer("There is nothing to remove")
         db.remove_expense(cmd_type)
+        await callback.message.answer("Information has been removed")
 
 @dp.message(StateFilter(StateMachine.waiting_for_amount))
 async def process_amount(message: Message, state: FSMContext):
     user_data = await state.get_data()
     try:
         user_input = message.text.split(maxsplit=1)
-        amount, description = user_input[0], " ".join(user_input[1:])
-        amount = float(amount)
-        time = datetime.now().isoformat()
-        currency = user_data.get("currency")
-        category = user_data.get("category")
-
-        spreadsheets.update_sheet(time, amount, currency, category, description)
-        db.add_expense(time, amount, currency, category, description)
-        
+        expense = {
+            "date": datetime.now().isoformat(),
+            "amount": user_input[0],
+            "currency": user_data.get("currency"),
+            "category": user_data.get("category"),
+            "description": " ".join(user_input[1:])
+        }
+        db.add_expense(expense)
         await message.answer(f"Done! Use /add to add new expense")
         await state.clear()
     except ValueError:
