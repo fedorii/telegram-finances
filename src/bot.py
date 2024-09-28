@@ -83,19 +83,19 @@ async def callback_controller(callback: CallbackQuery, state: FSMContext):
             InlineKeyboardButton(text="Tax", callback_data="category_tax"),
             InlineKeyboardButton(text="Sub", callback_data="category_sub")]])
         await callback.message.answer("Please choose the category:", reply_markup=keyboard)
-    
     if callback.data.startswith("category_"):
         category = callback.data.split("_")[1]
         await state.update_data(category=category)
         await callback.message.answer("Please enter the expense in this form: {amount} {description}")
         await state.set_state(StateMachine.waiting_for_amount)
-
     if callback.data.startswith("remove_"):
         cmd_type = callback.data.split("_")[1]
+        remove_function = spreadsheets.remove_from_sheet(cmd_type)
+        if remove_function:
+            await callback.message.answer("Information has been removed")
+        if not remove_function:
+            await callback.message.answer("There is nothing to remove")
         db.remove_expense(cmd_type)
-        # if cmd_type == "latest":                  # Implement removing 
-        #     spreadsheets.remove_update_sheet()    # action in Google Sheets
-        await callback.message.answer("Information has been removed")
 
 @dp.message(StateFilter(StateMachine.waiting_for_amount))
 async def process_amount(message: Message, state: FSMContext):
