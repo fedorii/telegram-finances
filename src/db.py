@@ -24,11 +24,11 @@ client = gspread.authorize(creds)
 sheet = client.open_by_key(sheet_key).sheet1
 
 
-def hex_to_rgb(hex_color):
+def hex_to_rgb(hex_color) -> tuple:
     rgb_color = ImageColor.getrgb(hex_color)
     return rgb_color
 
-def update_cell_color(action, category=None, row=None, col=None):
+def update_cell_color(action, category=None, row=None, col=None) -> None:
     if action == "remove":
         cell = f"D{row}:F{row}"
         sheet.format(cell, {
@@ -71,7 +71,6 @@ def update_cell_color(action, category=None, row=None, col=None):
 def add_expense(expense) -> None:
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
-
     cursor.execute("SELECT * FROM expenses")
     expenses = cursor.fetchall()
     if len(expenses) == 0:
@@ -86,7 +85,8 @@ def add_expense(expense) -> None:
     sheet.update_cell(row, 7, expense["description"])
     update_cell_color(action="add", category=expense["category"],
                       row=row, col=expense_column)
-
+    update_summary_section(action="add", amount=expense["amount"],
+                           currency=expense["currency"], category=expense["category"])
     cursor.execute('''
         INSERT INTO expenses (time, amount, currency, category, description)
         VALUES (?, ?, ?, ?, ?)
@@ -95,21 +95,25 @@ def add_expense(expense) -> None:
     conn.commit()
     conn.close()
 
-def remove_expense(cmd_type) -> None:
+def remove_expense(cmd_type):
     conn = sqlite3.connect("expenses.db")
     cursor = conn.cursor()
-    if cmd_type == "latest":
-        cursor.execute("SELECT * FROM expenses ORDER BY id DESC LIMIT 1")
-        latest_expense = cursor.fetchone()
-        if latest_expense:
-            row = sheet.find(latest_expense[1]).row
+
+    if cmd_type == "all":
+        cursor.execute("DELETE FROM expenses")
+
+        update_summary_section(action="remove_all")
+        update_cell_color(action="remove_all")
+    elif cmd_type == "latest":
+        expenses = get_expenses()
+        if expenses:
+            last_expense = expenses[-1]
             cursor.execute("DELETE FROM expenses WHERE id = (SELECT MAX(id) from expenses)")
+            row = sheet.find(last_expense[1]).row
             sheet.batch_clear([f"C{row}:G{row}"])
             update_cell_color(action="remove", row=row)
-    elif cmd_type == "all":
-        cursor.execute("DELETE FROM expenses")
-        sheet.batch_clear(["C19:G10000"])
-        update_cell_color(action="remove_all")
+            update_summary_section(action="remove", amount=last_expense[2],
+                                   currency=last_expense[3], category=last_expense[4])
     conn.commit()
     conn.close()
 
@@ -126,3 +130,37 @@ def format_expenses() -> str:
     columns = ["ID", "date", "amount", "currency", "category", "description"]
     table = tabulate(data, columns, tablefmt="grid")
     return table
+
+def update_summary_section(action, amount=None, currency=None, category=None):
+    section_coords = {
+        "currency_cols": {
+            "rub": 4,
+            "tng": 5, 
+            "usd": 6,
+            "total_usd": 7
+        },
+        "category_rows": {
+            "no": 6,
+            "food": 7,
+            "transport": 8,
+            "utilities": 9,
+            "education": 10,
+            "medical": 11,
+            "shopping": 12,
+            "tax": 13,
+            "sub": 14,
+            "investments": 15
+        },
+        "total": 16
+    }
+    if action == "remove_all":
+        sheet.batch_clear(["C19:G10000"])
+        sheet.batch_clear(["D6:G16"])
+        return
+    cell = sheet.cell(section_coords["category_rows"][category],
+                      section_coords["currency_cols"][currency])
+    cell_value = 0 if cell.value == None else int(cell.value)
+    if action == "add":
+        sheet.update_cell(cell.row, cell.col, cell_value + int(amount))
+    elif action == "remove":
+        sheet.update_cell(cell.row, cell.col, cell_value - int(amount))
