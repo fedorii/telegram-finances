@@ -8,26 +8,27 @@ from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
-from config import bot_token
-import db
+import config
+from database import DatabaseManager, TableFormatter, SheetManager
 
 
-dp = Dispatcher()
+db_manager = DatabaseManager()
+sheet_manager = SheetManager(config.sheet_key)
+table_formatter = TableFormatter()
 
 
 class StateMachine(StatesGroup):
     waiting_for_amount = State()
 
 
-@dp.message(CommandStart())
-async def cmd_start(message: Message):
+async def command_start(message: Message):
     await message.answer("""
 Welcome to Telegram Finances Bot!
 Type /add to add new expense.
 """)
 
-@dp.message(Command("help"))
-async def cmd_help(message: Message):
+
+async def command_help(message: Message):
     await message.answer("""                         
 I'm here to help you account your cash expenditures.
 Here's a list of the available commands:
@@ -38,8 +39,8 @@ Here's a list of the available commands:
     /help - Show this help message
 """)
 
-@dp.message(Command("add"))
-async def cmd_currency(message: Message):
+
+async def command_currency(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="RUB", callback_data="currency_rub"),
@@ -49,8 +50,8 @@ async def cmd_currency(message: Message):
     ])
     await message.answer("Please choose the currency:", reply_markup=keyboard)
 
-@dp.message(Command("remove"))
-async def cmd_remove(message: Message):
+
+async def command_remove(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="latest", callback_data="remove_latest"),
@@ -59,16 +60,16 @@ async def cmd_remove(message: Message):
     ])
     await message.answer("Please choose the action type:", reply_markup=keyboard)
 
-@dp.message(Command("show"))
-async def cmd_show_expenses(message: Message):
-    table = db.format_expenses()
+
+async def command_show_expenses(message: Message):
+    data = db_manager.get_table_data()
+    table = table_formatter.format_table(data)
     await message.answer(f"<pre>{table}</pre>", parse_mode="HTML")
 
-@dp.callback_query()
+
 async def callback_controller(callback: CallbackQuery, state: FSMContext):
     if callback.data.startswith("currency_"):
         currency = callback.data.split("_")[1]
-        await state.update_data(currency=currency)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text="No category", callback_data="category_no"),
             InlineKeyboardButton(text="Food", callback_data="category_food")
@@ -85,38 +86,50 @@ async def callback_controller(callback: CallbackQuery, state: FSMContext):
             InlineKeyboardButton(text="Sub", callback_data="category_sub"),
             InlineKeyboardButton(text="Investments", callback_data="category_investments")
         ]])
+        await state.update_data(currency=currency)
         await callback.message.answer("Please choose the category:", reply_markup=keyboard)
+    if callback.data.startswith("remove_"):
+        cmd_type = callback.data.split("_")[1]
+        db_manager.remove_from_db(cmd_type)
+        await callback.message.answer("Information has been removed")
     if callback.data.startswith("category_"):
         category = callback.data.split("_")[1]
         await state.update_data(category=category)
         await callback.message.answer("Please enter the expense in this form: {amount} {description}")
         await state.set_state(StateMachine.waiting_for_amount)
-    if callback.data.startswith("remove_"):
-        cmd_type = callback.data.split("_")[1]
-        db.remove_expense(cmd_type)
-        await callback.message.answer("Information has been removed")
+        
 
-@dp.message(StateFilter(StateMachine.waiting_for_amount))
-async def process_amount(message: Message, state: FSMContext):
+async def user_input_controller(message: Message, state: FSMContext):
     user_data = await state.get_data()
     try:
         user_input = message.text.split(maxsplit=1)
         expense = {
-            "date": datetime.now().isoformat(),
+            "time": datetime.now().isoformat(),
             "amount": user_input[0],
             "currency": user_data.get("currency"),
             "category": user_data.get("category"),
             "description": " ".join(user_input[1:])
         }
-        db.add_expense(expense)
+        db_manager.insert_new_data(expense)
+        sheet_manager.insert_new_data(expense, db_manager)
         await message.answer(f"Done! Use /add to add new expense")
         await state.clear()
     except ValueError:
         await message.answer("Invalid format. Please use: {amount} {category}")
 
 
-async def main(): 
-    bot = Bot(bot_token)
+async def main():
+    bot = Bot(config.bot_token)
+    dp = Dispatcher()
+
+    dp.message.register(command_start, CommandStart())
+    dp.message.register(command_help, Command("help"))
+    dp.message.register(command_currency, Command("add"))
+    dp.message.register(command_remove, Command("remove"))
+    dp.message.register(command_show_expenses, Command("show"))
+    dp.callback_query.register(callback_controller)
+    dp.message.register(user_input_controller, StateFilter(StateMachine.waiting_for_amount))
+
     await dp.start_polling(bot)
 
 
