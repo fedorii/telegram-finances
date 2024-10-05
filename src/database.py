@@ -90,3 +90,15 @@ class SheetManager:
         self.sheet.update_cell(row, columns["time"], new_data["time"])
         self.sheet.update_cell(row, columns["currency"][new_data["currency"]], new_data["amount"])
         self.sheet.update_cell(row, columns["description"], new_data["description"])
+
+    def remove_from_sheet(self, command: str) -> None:
+        if command == "all":
+            self.sheet.batch_clear(["C19:G996"])
+        elif command == "latest":
+            try:
+                last_expense_time = self.sheet.get_all_values("C19:C10000")[-1][0]
+                row = self.sheet.find(last_expense_time).row
+                self.sheet.batch_clear([f"C{row}:G{row}"])
+            except IndexError:
+                pass
+            
