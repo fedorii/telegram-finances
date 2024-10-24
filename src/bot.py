@@ -62,8 +62,8 @@ async def command_add(message: Message):
 async def command_remove(message: Message):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text='last expense', callback_data='rm_last'),
-            InlineKeyboardButton(text='all expenses', callback_data='rm_all'),
+            InlineKeyboardButton(text='last expense', callback_data='remove_last'),
+            InlineKeyboardButton(text='all expenses', callback_data='remove_all'),
         ]
     ])
     await message.answer('What do you want to remove?', reply_markup=keyboard)
@@ -76,7 +76,6 @@ async def command_see(message: Message):
 async def callback_controller(callback: CallbackQuery, state: FSMContext):
     if callback.data.startswith('currency_'):
         currency = callback.data.split('_')[1]
-        await state.update_data(currency=currency)
         keyboard = InlineKeyboardMarkup(inline_keyboard=[[
             InlineKeyboardButton(text='No category', callback_data='category_no category'),
             InlineKeyboardButton(text='Food', callback_data='category_food'),
@@ -93,6 +92,7 @@ async def callback_controller(callback: CallbackQuery, state: FSMContext):
             InlineKeyboardButton(text='Sub', callback_data='category_sub'),
             InlineKeyboardButton(text='Investments', callback_data='category_investments'),
         ]])
+        await state.update_data(currency=currency)
         await callback.message.answer('Please choose the category:', reply_markup=keyboard)
     if callback.data.startswith('category_'):
         category = callback.data.split('_')[1]
@@ -124,15 +124,13 @@ async def entry_amount(message: Message, state: FSMContext):
 async def main():
     bot = Bot(config.bot_token)
     dp = Dispatcher()
-
     dp.message.register(command_start, CommandStart())
     dp.message.register(command_help, Command('help'))
     dp.message.register(command_add, Command('add'))
     dp.message.register(command_remove, Command('remove'))
     dp.message.register(command_see, Command('see'))
-    dp.message.register(callback_controller, dp.callback_query())
+    dp.callback_query.register(callback_controller)
     dp.message.register(entry_amount, StateFilter(StateMachine.waiting_for_amount))
-
     await dp.start_polling(bot)
 
 

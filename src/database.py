@@ -42,14 +42,18 @@ class Database:
             cursor.execute('''
                 INSERT INTO expenses (time, amount, currency, category, description)
                 VALUES (?, ?, ?, ?, ?)
-            ''', expense['time'], expense['amount'], expense['currency'], expense['category'], expense['description'])
+            ''', (expense['time'], expense['amount'], expense['currency'],
+                  expense['category'], expense['description']))
 
     def remove_expense(self, command):
         with self.cursor_handler() as cursor:
             if command == 'all':
-                cursor.execute('DELETE * FROM expenses')
+                cursor.execute('DELETE FROM expenses')
             elif command == 'last':
-                cursor.execute('DELETE FROM expenses WHERE id = (SELECT MAX(id) from expenses)')
+                cursor.execute(f'SELECT COUNT(*) FROM expenses')
+                expenses_count = cursor.fetchone()[0]
+                if expenses_count:
+                    cursor.execute('DELETE FROM expenses WHERE id = (SELECT MAX(id) from expenses)')
 
     def format_table(self):
         columns = ['id', 'time', 'amount', 'currency', 'category', 'description']
