@@ -11,30 +11,26 @@ class SheetManager:
         self.sheet = self.client.open_by_key(config.sheet_key).sheet1
         self.db = database.Database()
 
-    async def insert_into_sheet(self, expense):
-        loop = asyncio.get_event_loop()
-        all_insertions = await loop.run_in_executor(None, self.sheet.get_values, 'C19:C997')
+    def insert_into_sheet(self, expense):
+        all_insertions = self.sheet.get_values('C19:C997')
         cols = { 'time': 3, 'currency': {'rub': 4, 'tng': 5, 'usd': 6}, 'description': 7 }
         try:
             last_insertion_time = all_insertions[-1][0]
-            row = await loop.run_in_executor(None, self.sheet.find, last_insertion_time)
-            row = row.row + 1
+            row = self.sheet.find(last_insertion_time).row + 1
         except IndexError:
             row = 19
-        await loop.run_in_executor(None, self.sheet.update_cell, row, cols['time'], expense['time'])
-        await loop.run_in_executor(None, self.sheet.update_cell, row, cols['currency'][expense['currency']], expense['amount'])
-        await loop.run_in_executor(None, self.sheet.update_cell, row, cols['description'], expense['description'])
+        self.sheet.update_cell(row, cols['time'], expense['time'])
+        self.sheet.update_cell(row, cols['currency'][expense['currency']], expense['amount'])
+        self.sheet.update_cell(row, cols['description'], expense['description'])
 
-    async def remove_from_sheet(self, command):
-        loop = asyncio.get_event_loop()
+    def remove_from_sheet(self, command):
         if command == 'all':
-            await loop.run_in_executor(None, self.sheet.batch_clear, ['C19:G996'])
+            self.sheet.batch_clear(['C19:G996'])
         elif command == 'last':
-            all_insertions = await loop.run_in_executor(None, self.sheet.get_values, 'C19:G997')
+            all_insertions = self.sheet.get_values('C19:G997')
             try:
                 last_insertion_time = all_insertions[-1][0]
-                row = await loop.run_in_executor(None, self.sheet.find, last_insertion_time)
-                row = row.row
+                row = self.sheet.find(last_insertion_time).row
             except IndexError:
                 row = 19
-            await loop.run_in_executor(None, self.sheet.batch_clear, [f'C{row}:G{row}'])
+            self.sheet.batch_clear([f'C{row}:G{row}'])
