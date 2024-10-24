@@ -108,7 +108,7 @@ async def callback_controller(callback: CallbackQuery, state: FSMContext):
     if callback.data.startswith('remove_'):
         command = callback.data.split('_')[1]
         db.remove_expense(command)
-        sheet.remove_from_sheet(command)
+        asyncio.create_task(sheet.remove_from_sheet(command))
         await callback.message.answer('Information has been removed')
 
 
@@ -124,7 +124,7 @@ async def entry_amount(message: Message, state: FSMContext):
             'description': ' '.join(user_input[1:])
         }
         db.add_expense(expense)
-        sheet.insert_into_sheet(expense)
+        asyncio.create_task(sheet.insert_into_sheet(expense))
         await message.answer('Done! Use /add to enter new expense')
         await state.clear()
     except ValueError:
